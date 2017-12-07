@@ -1,0 +1,44 @@
+#安装完毕之后重启控制节点服务
+systemctl restart openstack-glance-api.service openstack-glance-registry.service
+systemctl restart openstack-nova-api.service  openstack-nova-consoleauth.service openstack-nova-scheduler.service  openstack-nova-conductor.service openstack-nova-novncproxy.service
+systemctl restart openstack-nova-api.service
+systemctl restart neutron-server.service  neutron-linuxbridge-agent.service neutron-dhcp-agent.service  neutron-metadata-agent.service
+systemctl restart neutron-l3-agent.service
+systemctl restart httpd.service memcached.service
+
+
+#安装计算节点之后需要在控制节点执行如下内容
+. admin-openrc
+openstack hypervisor list
+su -s /bin/sh -c "nova-manage cell_v2 discover_hosts --verbose" nova
+vim /etc/nova/nova.conf
+[scheduler]
+discover_hosts_in_cells_interval = 300
+
+
+#创建一个实例的参考
+. admin-openrc 
+openstack network create  --share --external   --provider-physical-network provider   --provider-network-type flat provider
+openstack subnet create --network provider --allocation-pool start=START_IP_ADDRESS,end=END_IP_ADDRESS --dns-nameserver DNS_RESOLVER --gateway PROVIDER_NETWORK_GATEWAY --subnet-range PROVIDER_NETWORK_CIDR provider
+例如：openstack subnet create --network provider --allocation-pool start=10.22.4.65,end=10.22.4.70  --dns-nameserver 114.114.114.114 --gateway 10.22.4.1 --subnet-range 10.22.4.0/24 provider
+
+#创建一个模板（admin可修改创建，默认不存在flavor）
+openstack flavor create --id 0 --vcpus 1 --ram 64 --disk 1 m1.nano
+. demo-openrc 
+ssh-keygen -q -N ""
+openstack keypair create --public-key ~/.ssh/id_rsa.pub mykey
+openstack keypair list
+openstack security group rule create --proto icmp default
+openstack security group rule create --proto tcp --dst-port 22 default
+
+openstack flavor list
+openstack image list
+openstack network list
+openstack security group list
+openstack server list
+
+openstack server create --flavor m1.nano --image cirros --nic net-id=PROVIDER_NET_ID --security-group default --key-name mykey provider-instance
+
+#默认配置无法正常使用dashboard的vnc功能，需要修改计算节点/etc/nova/nova.conf
+[vnc]下controller修改为controller的IP地址
+重启服务systemctl restart openstack-nova-compute.service
